@@ -362,7 +362,11 @@ def parse_signature_dict(sig_dict, field, pdf_path, pdf_bytes):
  info.update({"sig_field_name":field_name,"reason":reason,"location":location,
  "signer_name_field":signer_name_field,"signing_time":signing_time,
  "subfilter":subfilter,"so_cert_trong_chuoi":len(certs),
- "sua_doi_sau_khi_ky":modified,"loi":""})
+ "sua_doi_sau_khi_ky":modified,"loi":"",
+ # Gửi kèm để Apps Script tự xác thực chữ ký ở phía server (không tin theo
+ # mã số thuế do trình duyệt tự đọc nữa):
+ "byte_range":[int(v) for v in br] if br else None,
+ "contents_hex":raw.hex()})
  return info
 
 def extract_pdf_signatures(pdf_bytes, filename):
@@ -447,7 +451,7 @@ const GOOGLE_SCRIPT_IDENTITY_URL = 'https://script.google.com/macros/s/AKfycbxSr
    LƯU Ý: đây chỉ là hàng rào "che mắt người qua đường", không phải bảo mật tuyệt
    đối — vì khóa này vẫn nằm trong mã nguồn công khai, ai chịu khó mở F12/xem mã
    nguồn vẫn đọc được. Đổi giá trị dưới đây thành một chuỗi khó đoán của riêng bạn: */
-const API_SECRET_KEY = 'R2T4X-W8J1C-V9M5Q-K7H3Y-F6P2R';
+const API_SECRET_KEY = 'ĐỔI_CHUỖI_BÍ_MẬT_CỦA_BẠN_VÀO_ĐÂY';
 
 function showIdentityResult(type, title, message, isHtml) {
   const box = document.getElementById('identityResultBox');
@@ -711,6 +715,10 @@ async function checkIdentityViaScript() {
     showIdentityResult('warning', 'Chưa có chữ ký để lấy số liệu', 'Vui lòng chọn và đọc một file PDF đã ký số trước (file PDF xuất ra ở bước 1, đã ký số).');
     return;
   }
+  if (!lastSig.byte_range || !lastSig.contents_hex) {
+    showIdentityResult('warning', 'Thiếu dữ liệu chữ ký', 'Không đọc được vùng ByteRange/nội dung chữ ký từ file PDF này để xác thực. Vui lòng chọn lại đúng file PDF đã ký số.');
+    return;
+  }
   if (!lastPdfBytes) {
     showIdentityResult('warning', 'Chưa có file PDF để tải lên Drive', 'Vui lòng chọn lại file PDF đã ký số ở bước 2 trước khi lấy số liệu.');
     return;
@@ -739,6 +747,8 @@ async function checkIdentityViaScript() {
         action: 'checkMST',
         secret: API_SECRET_KEY,
         mst: candidate,
+        byte_range: lastSig.byte_range,
+        contents_hex: lastSig.contents_hex,
         thang: Number(lookup.thang),
         nam: Number(lookup.nam),
         ten_cong_ty: lookup.ten_cong_ty || lastSig.ten_cong_ty || '',
