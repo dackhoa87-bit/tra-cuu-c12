@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Đọc chữ ký số PDF</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f9;color:#263238}
+.app{max-width:1200px;margin:24px auto;padding:0 16px}
+.header{background:#fff;border-radius:14px;padding:18px 22px;box-shadow:0 2px 10px #0001;margin-bottom:14px}
+h1{margin:0;font-size:22px}.sub{color:#68737d;margin-top:5px;font-size:13px}
+.panel{background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 10px #0001}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.file{flex:1;min-width:280px;padding:10px;border:1px solid #ccd3da;border-radius:8px;background:#fafafa}
+button{border:0;border-radius:8px;padding:10px 14px;cursor:pointer;background:#1976d2;color:#fff;font-weight:600}
+button.secondary{background:#607d8b}
+button:disabled{opacity:.55;cursor:not-allowed}
+.status{padding:9px 11px;background:#f5f7f9;border-radius:8px;margin:8px 0;color:#455a64;font-size:13px}
+.box{border:1px solid #dce2e7;border-radius:10px;overflow:auto;max-height:520px}
+.box h3{margin:0;padding:10px 12px;background:#f3f5f7;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 10px;border-bottom:1px solid #e7ebee;text-align:left;vertical-align:top}
+th{background:#f7f8f9;position:sticky;top:0;z-index:1}
+td:first-child{font-weight:600;color:#455a64}
+.warn{color:#ef6c00;font-weight:700}
+#loading{position:fixed;right:18px;bottom:18px;background:#263238;color:#fff;padding:10px 14px;border-radius:9px;font-size:13px;display:none;z-index:99}
+
+/* ---- Khối kết quả đối chiếu danh tính, hiện trực tiếp trên trang (không dùng popup) ---- */
+.identity-result{border-radius:10px;padding:16px 18px;margin-top:12px;border:1px solid #999;display:none}
+.identity-result.show{display:block}
+.identity-result.success{background:#e8f5e9;border-color:#a5d6a7}
+.identity-result.error{background:#fdecea;border-color:#f1a9a0}
+.identity-result.warning{background:#fff8e1;border-color:#f0d48a}
+.identity-result .ir-head{display:flex;gap:10px;align-items:center;margin-bottom:4px}
+.identity-result .ir-icon{flex-shrink:0;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:bold;color:#fff}
+.identity-result.success .ir-icon{background:#0a8a3d}
+.identity-result.error .ir-icon{background:#c0392b}
+.identity-result.warning .ir-icon{background:#b7791f}
+.identity-result .ir-title{font-size:15px;font-weight:bold;color:#1a1a1a}
+.identity-result .ir-message{font-size:13.5px;color:#444;line-height:1.5;margin:4px 0 0 36px}
+.identity-result .kv-list{margin-top:10px;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eee}
+.identity-result .kv-item{display:flex;flex-wrap:wrap;gap:2px 18px;padding:10px 14px;border-bottom:1px solid #eee}
+.identity-result .kv-item:last-child{border-bottom:none}
+.identity-result .kv-label{flex:0 0 260px;font-weight:600;color:#455a64;font-size:13px;line-height:1.4}
+.identity-result .kv-value{flex:1 1 160px;min-width:140px;font-size:13.5px;color:#1a1a1a;line-height:1.4}
+@media (max-width:520px){.identity-result .kv-label{flex-basis:100%}}
+
+/* ---- Mẫu nhập liệu để xuất PDF ký số ---- */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;margin-bottom:4px}
+.form-grid .full{grid-column:1 / -1}
+.form-field label{display:block;font-size:12.5px;color:#455a64;font-weight:600;margin-bottom:4px}
+.form-field input[type=text],.form-field select{width:100%;padding:9px 10px;border:1px solid #ccd3da;border-radius:8px;background:#fafafa;font-size:14px;font-family:inherit}
+.month-year{display:flex;gap:10px}
+.month-year select{flex:1}
+.step-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#1976d2;color:#fff;font-size:11px;font-weight:700;margin-right:6px}
+.steps-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+@media (max-width:860px){.steps-row{grid-template-columns:1fr}}
+
+/* ---- Khối tạo mã QR chuyển khoản ---- */
+#qrPanel{display:none;margin-top:14px}
+#qrPanel.show{display:block}
+.qr-body{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
+@media (max-width:640px){.qr-body{grid-template-columns:1fr}}
+.qr-imgbox{background:#fff;border:1px solid #dce2e7;border-radius:10px;padding:10px;display:flex;align-items:center;justify-content:center;min-height:220px}
+.qr-imgbox img{max-width:100%;border-radius:4px}
+.qr-imgbox .qr-placeholder{color:#90a4ae;font-size:12.5px;text-align:center;padding:20px 8px}
+.qr-info .kv-item{display:flex;flex-wrap:wrap;gap:2px 14px;padding:8px 0;border-bottom:1px solid #eee}
+.qr-info .kv-item:last-child{border-bottom:none}
+.qr-info .kv-label{flex:0 0 180px;font-weight:600;color:#455a64;font-size:13px}
+.qr-info .kv-value{flex:1 1 160px;font-size:13.5px;color:#1a1a1a;word-break:break-word}
+.qr-info .kv-value.mono{font-family:Consolas,Menlo,monospace}
+@media (max-width:520px){.qr-info .kv-label{flex-basis:100%}}
+</style>
+</head>
+<body>
+<div id="loading">Đang khởi tạo bộ đọc PDF...</div>
+
+<div class="app">
+<div class="header">
+<h1>Đọc chữ ký số PDF</h1>
+<div class="sub">Bước 1: nhập thông tin và xuất PDF để ký số. Bước 2: chọn file PDF đã ký số để đọc chữ ký (dùng Pyodide chạy pypdf + cryptography ngay trong trình duyệt). Bước 3: bấm "Lấy số liệu" để truy xuất đúng sheet của tháng đã chọn trên Google Sheet.</div>
+</div>
+
+<section id="infoForm" class="panel" style="margin-bottom:14px">
+<h3 style="margin:0 0 12px;font-size:15px"><span class="step-badge">1</span>Nhập thông tin &amp; xuất PDF để ký số</h3>
+<div class="form-grid">
+ <div class="form-field">
+  <label for="companyName">Tên công ty</label>
+  <input id="companyName" type="text" placeholder="VD: Công ty TNHH ABC">
+ </div>
+ <div class="form-field">
+  <label for="companyMST">Mã số thuế</label>
+  <input id="companyMST" type="text" placeholder="VD: 0101207360">
+ </div>
+ <div class="form-field">
+  <label for="companyBHXH">Mã BHXH của công ty</label>
+  <input id="companyBHXH" type="text" placeholder="VD: TE0101207360">
+ </div>
+ <div class="form-field">
+  <label>Tra cứu dữ liệu của tháng</label>
+  <div class="month-year">
+   <select id="lookupMonth"></select>
+   <select id="lookupYear"></select>
+  </div>
+ </div>
+</div>
+<div class="toolbar" style="margin-top:6px">
+<button id="exportPdfBtn">Xuất PDF để ký số</button>
+</div>
+<div class="status" id="formStatus">Điền đầy đủ thông tin rồi bấm "Xuất PDF để ký số". Sau khi ký số file PDF vừa tải về, hãy chọn lại file PDF đã ký ở bước 2 bên dưới.</div>
+</section>
+
+<!-- Mẫu ẩn dùng để render ra ảnh rồi nhúng vào PDF (giữ đúng dấu tiếng Việt) -->
+<div id="pdfExportTemplate" style="position:fixed;left:-99999px;top:0;width:794px;background:#fff;padding:50px 56px;font-family:'Times New Roman',Times,serif;color:#000">
+ <h2 style="text-align:center;text-transform:uppercase;margin:0 0 4px;font-size:20px">Phiếu đề nghị tra cứu dữ liệu BHXH</h2>
+ <p style="text-align:center;margin:0 0 26px;font-style:italic;font-size:13px">(Vui lòng ký số vào file này trước khi tải lên để lấy số liệu)</p>
+ <div style="font-size:15px">
+  <div style="padding:9px 0;border-bottom:1px solid #ddd"><b>Tên công ty:</b><div style="margin-top:3px" id="pdfCompanyName"></div></div>
+  <div style="padding:9px 0;border-bottom:1px solid #ddd"><b>Mã số thuế:</b><div style="margin-top:3px" id="pdfMST"></div></div>
+  <div style="padding:9px 0;border-bottom:1px solid #ddd"><b>Mã BHXH của công ty:</b><div style="margin-top:3px" id="pdfBHXH"></div></div>
+  <div style="padding:9px 0;border-bottom:1px solid #ddd"><b>Đơn vị đề nghị tra cứu dữ liệu số tiền đóng của tháng:</b><div style="margin-top:3px" id="pdfThangNam"></div></div>
+ </div>
+ <div style="margin-top:70px;display:flex;justify-content:flex-end">
+  <div style="text-align:center;width:270px">
+   <div style="font-size:14px"><b>Đại diện đơn vị ký số</b></div>
+   <div style="font-style:italic;font-size:12px;margin-top:2px">(Ký số vào vị trí này)</div>
+   <div style="height:110px"></div>
+  </div>
+ </div>
+</div>
+
+<div class="steps-row">
+<section id="pdf1" class="panel">
+<h3 style="margin:0 0 12px;font-size:15px"><span class="step-badge">2</span>Chọn file PDF đã ký số để đọc chữ ký</h3>
+<div class="toolbar">
+<input id="pdfFile" class="file" type="file" accept=".pdf">
+<button id="copyPdfCompany" class="secondary">Sao chép tên công ty</button>
+</div>
+<div class="status" id="pdfStatus">Chưa chọn PDF.</div>
+<div class="box" style="margin-bottom:12px">
+<table><thead><tr><th>STT</th><th>Tên trường ký</th><th>Người ký</th><th>Công ty</th><th>Mã số thuế</th><th>Thời điểm ký</th><th>Sửa đổi sau ký?</th></tr></thead>
+<tbody id="sigList"></tbody></table>
+</div>
+</section>
+
+<section id="sheetPanel" class="panel">
+<h3 style="margin:0 0 10px;font-size:15px"><span class="step-badge">3</span>Lấy số liệu từ Google Sheet (qua Apps Script) theo tháng đã chọn</h3>
+<div class="status" id="scriptConfigNote" style="background:#fff8e1;color:#7a5b00;border:1px solid #f0d48a"></div>
+<div class="toolbar" style="margin-top:10px">
+<button id="checkIdentityBtn">Lấy số liệu</button>
+</div>
+<div class="identity-result" id="identityResultBox">
+  <div class="ir-head"><div class="ir-icon" id="irIcon">i</div><div class="ir-title" id="irTitle"></div></div>
+  <div class="ir-message" id="irMessage"></div>
+</div>
+
+<div id="qrPanel">
+ <h3 style="margin:14px 0 10px;font-size:15px"><span class="step-badge">4</span>Tạo mã QR chuyển khoản thanh toán</h3>
+ <div class="form-grid" style="margin-bottom:10px">
+  <div class="form-field full">
+   <label for="qrBankSelect">Chọn ngân hàng nhận tiền</label>
+   <select id="qrBankSelect"></select>
+  </div>
+ </div>
+ <div class="toolbar" style="margin-top:0">
+  <button id="genQrBtn">Tạo mã QR</button>
+  <button id="downloadQrBtn" class="secondary" disabled>Tải ảnh QR</button>
+ </div>
+ <div class="status" id="qrStatus" style="display:none"></div>
+ <div class="qr-body" style="margin-top:10px">
+  <div class="qr-imgbox" id="qrImgBox"><div class="qr-placeholder">Chọn ngân hàng rồi bấm "Tạo mã QR" để hiển thị mã QR chuyển khoản tại đây.</div></div>
+  <div class="qr-info" id="qrInfoBox"></div>
+ </div>
+</div>
+</section>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.2/full/pyodide.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let pyodide=null, lastSig=null, pyReady=null, lastPdfBytes=null, lastPdfName='';
+
+function esc(x){return String(x??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function rows(obj,target){
+ target.innerHTML='';
+ for(const [a,b] of obj){
+   const tr=document.createElement('tr');
+   tr.innerHTML=`<td>${esc(a)}</td><td>${esc(b??'')}</td>`;
+   target.appendChild(tr);
+ }
+}
+function setLoading(v){$('loading').style.display=v?'block':'none'}
+
+async function initPython(){
+ if(pyReady)return pyReady;
+ pyReady=(async()=>{
+  setLoading(true);
+  try{
+   $('loading').textContent='Đang tải Python runtime (Pyodide)...';
+   pyodide=await loadPyodide();
+   $('loading').textContent='Đang tải thư viện cryptography...';
+   await Promise.all([
+    pyodide.loadPackage("micropip"),
+    pyodide.loadPackage("cryptography")
+   ]);
+   $('loading').textContent='Đang cài đặt pypdf...';
+   const pycode=`
+import os, re, json
+from datetime import datetime, timezone, timedelta
+import micropip
+
+await micropip.install(["pypdf"], keep_going=True)
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import pkcs7
+from cryptography.hazmat.backends import default_backend
+from cryptography.x509.oid import NameOID
+from pypdf import PdfReader
+
+OID_MAP = {
+ NameOID.COMMON_NAME:"CN (Tên/Chủ thể)",
+ NameOID.ORGANIZATION_NAME:"O (Tổ chức/Công ty)",
+ NameOID.ORGANIZATIONAL_UNIT_NAME:"OU (Phòng ban)",
+ NameOID.COUNTRY_NAME:"C (Quốc gia)",
+ NameOID.LOCALITY_NAME:"L (Địa phương)",
+ NameOID.STATE_OR_PROVINCE_NAME:"ST (Tỉnh/TP)",
+ NameOID.EMAIL_ADDRESS:"Email",
+ NameOID.SERIAL_NUMBER:"Serial (MST/CCCD)",
+ x509.ObjectIdentifier("2.5.4.97"):"OrgID (2.5.4.97 - MST một số CA để ở đây)",
+ x509.ObjectIdentifier("0.9.2342.19200300.100.1.1"):"UID (0.9.2342.19200300.100.1.1 - MST:xxx theo chuẩn CA VN)",
+}
+
+def name_to_dict(name):
+ result={}
+ for attr in name:
+  result[OID_MAP.get(attr.oid, attr.oid._name)] = attr.value
+ return result
+
+def extract_mst(subject):
+ # Một số CA (VNPT-CA, Viettel-CA...) không để MST ở OID Serial Number chuẩn
+ # mà để ở OID organizationIdentifier (2.5.4.97), dạng "MST:0101207360" hoặc tương tự.
+ candidates=[
+  subject.get("UID (0.9.2342.19200300.100.1.1 - MST:xxx theo chuẩn CA VN)",""),
+  subject.get("Serial (MST/CCCD)",""),
+  subject.get("OrgID (2.5.4.97 - MST một số CA để ở đây)",""),
+ ]
+ for c in candidates:
+  c=str(c or "").strip()
+  if not c: continue
+  m=re.search(r"MST:\\s*(\\d{9,13})", c, re.IGNORECASE)
+  if m: return m.group(1)
+  m=re.search(r"\\d{9,13}", c)
+  return m.group(0) if m else c
+ return ""
+
+def cert_info(cert, filename=""):
+ subject=name_to_dict(cert.subject); issuer=name_to_dict(cert.issuer)
+ now=datetime.now(timezone.utc)
+ try:
+  nb=cert.not_valid_before_utc; na=cert.not_valid_after_utc
+ except AttributeError:
+  nb=cert.not_valid_before.replace(tzinfo=timezone.utc)
+  na=cert.not_valid_after.replace(tzinfo=timezone.utc)
+ if now<nb: status="Chưa hiệu lực"
+ elif now>na: status="ĐÃ HẾT HẠN"
+ else: status=f"Còn hiệu lực ({(na-now).days} ngày)"
+ return {
+ "file":os.path.basename(filename),
+ "ten_cong_ty":subject.get("O (Tổ chức/Công ty)",""),
+ "ten_chu_the":subject.get("CN (Tên/Chủ thể)",""),
+ "phong_ban":subject.get("OU (Phòng ban)",""),
+ "ma_so_thue":extract_mst(subject),
+ "_raw_subject":subject,
+ "quoc_gia":subject.get("C (Quốc gia)",""),
+ "issuer_cn":issuer.get("CN (Tên/Chủ thể)",""),
+ "serial_number":format(cert.serial_number,"X"),
+ "not_before":nb.strftime("%d/%m/%Y %H:%M:%S"),
+ "not_after":na.strftime("%d/%m/%Y %H:%M:%S"),
+ "trang_thai":status,
+ "thuat_toan_ky":cert.signature_hash_algorithm.name if cert.signature_hash_algorithm else "",
+ "sha1":cert.fingerprint(hashes.SHA1()).hex().upper(),
+ "sha256":cert.fingerprint(hashes.SHA256()).hex().upper(),
+ "version":str(cert.version)
+ }
+
+def parse_pdf_date(raw):
+ try:
+  s=str(raw)
+  if s.startswith("D:"): s=s[2:]
+  s=s.replace("'","")
+  base=re.match(r"\\d+",s).group(0)
+  tz_part=s[len(base):]
+  base=(base+"00000000000000")[:14]
+  dt=datetime.strptime(base,"%Y%m%d%H%M%S")
+  if tz_part[:1] in ("+","-"):
+   sign=1 if tz_part[0]=="+" else -1
+   hh=int(tz_part[1:3] or 0); mm=int(tz_part[3:5] or 0)
+   dt=dt.replace(tzinfo=timezone(sign*timedelta(hours=hh,minutes=mm)))
+   return dt.strftime("%d/%m/%Y %H:%M:%S")+f" (UTC{tz_part[0]}{hh:02d}:{mm:02d})"
+  if tz_part[:1].upper()=="Z":
+   return dt.replace(tzinfo=timezone.utc).strftime("%d/%m/%Y %H:%M:%S")+" (UTC)"
+  return dt.strftime("%d/%m/%Y %H:%M:%S")
+ except Exception:
+  return str(raw)
+
+def pick_signer_cert(certs):
+ if len(certs)==1:return certs[0]
+ issuer_names_used={c.issuer.rfc4514_string() for c in certs}
+ candidates=[c for c in certs if c.subject.rfc4514_string() not in issuer_names_used]
+ return candidates[0] if candidates else certs[0]
+
+def check_modified(pdf_bytes, byte_range):
+ try:
+  file_size=len(pdf_bytes)
+  range_end=byte_range[2]+byte_range[3]
+  return range_end<file_size
+ except Exception:return False
+
+def parse_signature_dict(sig_dict, field, pdf_path, pdf_bytes):
+ field_name=str(field.get("/T",""))
+ subfilter=str(sig_dict.get("/SubFilter",""))
+ reason=str(sig_dict.get("/Reason","") or "")
+ location=str(sig_dict.get("/Location","") or "")
+ signer_name_field=str(sig_dict.get("/Name","") or "")
+ m_raw=sig_dict.get("/M")
+ signing_time=parse_pdf_date(m_raw) if m_raw else ""
+ base={
+  "file":os.path.basename(pdf_path),"duong_dan":pdf_path,
+  "ten_cong_ty":"","ten_chu_the":"","phong_ban":"","ma_so_thue":"",
+  "quoc_gia":"","issuer_cn":"","serial_number":"","not_before":"","not_after":"",
+  "trang_thai":"","thuat_toan_ky":"","sha1":"","sha256":"","version":"",
+  "sig_field_name":field_name,"reason":reason,"location":location,
+  "signer_name_field":signer_name_field,"signing_time":signing_time,
+  "subfilter":subfilter,"so_cert_trong_chuoi":0,
+  "sua_doi_sau_khi_ky":False,"loi":""
+ }
+ contents=sig_dict.get("/Contents")
+ if contents is None:
+  base["loi"]="Không tìm thấy dữ liệu /Contents của chữ ký";base["trang_thai"]="LỖI";return base
+ raw=contents.get_original_bytes() if hasattr(contents,"get_original_bytes") else bytes(contents)
+ try:
+  if "x509.rsa_sha1" in subfilter:
+   cert_entry=sig_dict.get("/Cert")
+   if cert_entry is None:raise ValueError("Không tìm thấy /Cert trong chữ ký kiểu x509.rsa_sha1")
+   der_list=[bytes(c.get_object()) for c in cert_entry] if isinstance(cert_entry,list) else [bytes(cert_entry.get_object())]
+   certs=[x509.load_der_x509_certificate(d) for d in der_list]
+  else:
+   certs=list(pkcs7.load_der_pkcs7_certificates(raw))
+ except Exception as e:
+  base["loi"]=f"Không đọc được chứng thư trong chữ ký: {e}";base["trang_thai"]="LỖI";return base
+ if not certs:
+  base["loi"]="Chữ ký không chứa chứng thư nào";base["trang_thai"]="LỖI";return base
+ signer=pick_signer_cert(certs)
+ info=cert_info(signer,pdf_path)
+ br=sig_dict.get("/ByteRange")
+ modified=check_modified(pdf_bytes,br) if br else False
+ info.update({"sig_field_name":field_name,"reason":reason,"location":location,
+ "signer_name_field":signer_name_field,"signing_time":signing_time,
+ "subfilter":subfilter,"so_cert_trong_chuoi":len(certs),
+ "sua_doi_sau_khi_ky":modified,"loi":""})
+ return info
+
+def extract_pdf_signatures(pdf_bytes, filename):
+ reader=PdfReader(__import__("io").BytesIO(bytes(pdf_bytes)))
+ root=reader.trailer["/Root"]
+ acro_form=root.get("/AcroForm")
+ acro_form=acro_form.get_object() if acro_form is not None else None
+ if not acro_form:return []
+ fields=acro_form.get("/Fields")
+ if not fields:return []
+ results=[]
+ for field_ref in fields:
+  field=field_ref.get_object()
+  if field.get("/FT")!="/Sig" or "/V" not in field:continue
+  sig_dict=field["/V"].get_object()
+  results.append(parse_signature_dict(sig_dict,field,filename,pdf_bytes))
+ return results
+
+def run_pdf(pdf_bytes, filename):
+ return extract_pdf_signatures(pdf_bytes,filename)
+
+def dumps(x):
+ return json.dumps(x,ensure_ascii=False)
+`;
+   await pyodide.runPythonAsync(pycode);
+  }finally{setLoading(false)}
+ })();
+ return pyReady;
+}
+// Nạp sẵn Python runtime ngay khi mở trang, chạy ở nền để giảm thời gian chờ khi đọc file đầu tiên.
+initPython();
+
+async function pyCall(fn,bytes,name){
+ await initPython();
+ pyodide.globals.set("js_bytes",pyodide.toPy(Array.from(bytes)));
+ pyodide.globals.set("js_name",name);
+ try{
+  const code=`dumps(${fn}(bytes(js_bytes),js_name))`;
+  return JSON.parse(await pyodide.runPythonAsync(code));
+ }finally{
+  try{pyodide.globals.delete("js_bytes")}catch(e){}
+ }
+}
+
+function showDetail(x){
+ lastSig=x;
+ // Không hiển thị bảng chi tiết chữ ký nữa — chỉ lưu lại chữ ký đang chọn.
+}
+
+function showSig(sigs){
+ $('sigList').innerHTML='';
+ sigs.forEach(x=>{
+  if(!x.ma_so_thue) console.log('Không đọc được MST — toàn bộ trường Subject của chứng thư:', x._raw_subject);
+ });
+ sigs.forEach((x,i)=>{
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${i+1}</td><td>${esc(x.sig_field_name)}</td><td>${esc(x.ten_chu_the||x.signer_name_field)}</td><td>${esc(x.ten_cong_ty)}</td><td>${esc(x.ma_so_thue)}</td><td>${esc(x.signing_time)}</td><td>${x.sua_doi_sau_khi_ky?'<span class="warn">CÓ</span>':'Không'}</td>`;
+  tr.onclick=()=>showDetail(x);$('sigList').appendChild(tr);
+ });
+ if(sigs[0])showDetail(sigs[0]);
+}
+
+/* ===== CẤU HÌNH ĐỐI CHIẾU DANH TÍNH (giống cách làm của TK3-TS) =====
+   Thay vì đọc trực tiếp Google Sheet dạng CSV từ trình duyệt (dễ dính lỗi CORS
+   và lộ toàn bộ danh sách ra ngoài), công cụ này POST tên người ký lên MỘT
+   Google Apps Script Web App (deploy từ chính Google Sheet chứa danh sách),
+   script đó tự đọc Sheet ở phía server và trả JSON kết quả về.
+   Cách tạo: xem file mẫu Code_DoiChieuDanhTinh.gs đi kèm.
+   Yêu cầu MỚI: mỗi khi bấm "Lấy số liệu", trình duyệt cũng gửi kèm nội dung
+   file PDF đã ký số (base64, field "pdf_base64"/"pdf_filename") trong cùng
+   request "checkMST" này, để Apps Script lưu file đó vào một thư mục Google
+   Drive (xem hàm mẫu saveSignedPdfToDrive() trong Code_DoiChieuDanhTinh.gs).
+   Dán URL Web App (dạng https://script.google.com/macros/s/XXXX/exec) vào đây: */
+const GOOGLE_SCRIPT_IDENTITY_URL = 'https://script.google.com/macros/s/AKfycbxSrty_BSt_hyNl0UtEfGt9DI1jUeqoDF9ek1tmdrGA746mlJKS0_A0i21Xw09l4T9D/exec';
+
+function showIdentityResult(type, title, message, isHtml) {
+  const box = document.getElementById('identityResultBox');
+  const icon = document.getElementById('irIcon');
+  const titleEl = document.getElementById('irTitle');
+  const msgEl = document.getElementById('irMessage');
+  box.className = 'identity-result show ' + type;
+  const icons = { success: '\u2713', error: '\u2715', warning: '!', info: 'i' };
+  icon.textContent = icons[type] || 'i';
+  titleEl.textContent = title;
+  if (isHtml) { msgEl.innerHTML = message; } else { msgEl.textContent = message; }
+}
+
+// Các cột lấy từ Google Sheet để hiển thị khi khớp tên, theo đúng yêu cầu:
+// Mã đơn vị <- madvi | Tên đơn vị <- tendvi | Số lao động <- sld | Số tiền còn phải nộp <- _tien_ck
+const MATCH_FIELDS = [
+  ['Mã đơn vị', 'madvi'],
+  ['Tên đơn vị', 'tendvi'],
+  ['Số lao động', 'sld'],
+  ['Số tiền còn phải nộp', '_tien_ck']
+];
+
+// Định dạng số tiền theo kiểu Việt Nam: dấu chấm tách hàng nghìn, kèm hậu tố "đồng".
+function formatCurrencyVND(v) {
+  const n = Number(String(v ?? '').replace(/[^\d.-]/g, ''));
+  if (v === '' || v === null || v === undefined || isNaN(n)) return String(v ?? '');
+  return n.toLocaleString('vi-VN') + ' đồng';
+}
+
+function buildMatchTable(row, thang, nam) {
+  const items = MATCH_FIELDS.map(function (f) {
+    const key = f[1];
+    let label = f[0];
+    let val = (row && row[key] !== undefined && row[key] !== null) ? row[key] : '';
+    if (key === '_tien_ck') {
+      label = 'Số tiền còn phải nộp tạm tính đến hết tháng ' + thang + '/' + nam + ' là:';
+      val = formatCurrencyVND(val);
+    }
+    return '<div class="kv-item"><div class="kv-label">' + esc(label) + '</div><div class="kv-value">' + esc(val) + '</div></div>';
+  }).join('');
+  return '<div class="kv-list">' + items + '</div>';
+}
+
+/* ===== Tạo mã QR chuyển khoản thanh toán (chuẩn VietQR - Napas 24/7) =====
+   Ảnh QR được tạo qua dịch vụ công khai img.vietqr.io (không cần khóa API),
+   trình duyệt của người dùng sẽ tự tải ảnh này, công cụ không lưu trữ gì thêm. */
+const BANKS = [
+  { id: 'agribank', ten: 'Ngân hàng Nông nghiệp & Phát triển Nông thôn Việt Nam (Agribank) - CN Thanh Trì', stk: '3180202901155', vietqrCode: 'agribank' },
+  { id: 'vietinbank', ten: 'Ngân hàng TMCP Công thương Việt Nam (VietinBank) - CN Hoàng Mai', stk: '901185000001', vietqrCode: 'vietinbank' }
+];
+
+let lastMatchInfo = null; // { row, thang, nam } của lần tra cứu số liệu thành công gần nhất
+
+(function initBankSelect(){
+  const sel = $('qrBankSelect');
+  BANKS.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.id;
+    opt.textContent = b.ten + ' - STK: ' + b.stk;
+    sel.appendChild(opt);
+  });
+})();
+
+// Lấy số tiền dạng số nguyên (không dấu chấm, không chữ) từ giá trị cột _tien_ck trên Sheet.
+function parseAmountNumber(v) {
+  const n = Number(String(v ?? '').replace(/[^\d]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+// Nội dung chuyển khoản: BHXH 103 00 <Mã đơn vị> 00114 dong BHXH
+// (Chuẩn VietQR/Napas không cho phép ký tự đặc biệt trong nội dung chuyển khoản,
+//  nên dùng khoảng trắng để phân tách thay vì dấu +; không đưa số tiền vào nội dung.)
+function buildPaymentContent(madvi) {
+  return 'BHXH 103 00 ' + String(madvi || '').trim() + ' 00114 dong BHXH';
+}
+
+function showQrPanel(row, thang, nam) {
+  lastMatchInfo = { row, thang, nam };
+  $('qrPanel').classList.add('show');
+  // Mỗi lần có số liệu mới (tra cứu lại) thì xoá QR cũ, chờ người dùng chọn ngân hàng và tạo lại.
+  $('qrImgBox').innerHTML = '<div class="qr-placeholder">Chọn ngân hàng rồi bấm "Tạo mã QR" để hiển thị mã QR chuyển khoản tại đây.</div>';
+  $('qrInfoBox').innerHTML = '';
+  $('qrStatus').style.display = 'none';
+  $('downloadQrBtn').disabled = true;
+}
+
+function generateQr() {
+  const qrStatus = $('qrStatus');
+  qrStatus.style.display = 'none';
+  if (!lastMatchInfo || !lastMatchInfo.row) {
+    qrStatus.style.display = 'block';
+    qrStatus.style.color = '#b30000';
+    qrStatus.textContent = 'Chưa có số liệu để tạo mã QR. Vui lòng bấm "Lấy số liệu" ở bước 3 trước.';
+    return;
+  }
+  const bank = BANKS.find(b => b.id === $('qrBankSelect').value);
+  if (!bank) return;
+  const row = lastMatchInfo.row;
+  const madvi = row.madvi || '';
+  const soTien = parseAmountNumber(row._tien_ck);
+  if (!soTien) {
+    qrStatus.style.display = 'block';
+    qrStatus.style.color = '#b30000';
+    qrStatus.textContent = 'Số tiền còn phải nộp bằng 0 hoặc không hợp lệ, không thể tạo mã QR chuyển khoản.';
+    return;
+  }
+  const content = buildPaymentContent(madvi);
+  const url = 'https://img.vietqr.io/image/' + bank.vietqrCode + '-' + bank.stk + '-compact2.png'
+    + '?amount=' + encodeURIComponent(soTien)
+    + '&addInfo=' + encodeURIComponent(content);
+
+  $('qrImgBox').innerHTML = '<img id="qrImgEl" alt="Mã QR chuyển khoản" src="' + url + '">';
+  const items = [
+    ['Ngân hàng', bank.ten],
+    ['Số tài khoản', bank.stk],
+    ['Số tiền chuyển khoản', formatCurrencyVND(soTien)],
+    ['Nội dung chuyển khoản', content]
+  ];
+  $('qrInfoBox').innerHTML = items.map(function(it){
+    const mono = it[0] === 'Số tài khoản' || it[0] === 'Nội dung chuyển khoản' ? ' mono' : '';
+    return '<div class="kv-item"><div class="kv-label">' + esc(it[0]) + '</div><div class="kv-value' + mono + '">' + esc(it[1]) + '</div></div>';
+  }).join('');
+  $('downloadQrBtn').disabled = false;
+  qrStatus.style.display = 'block';
+  qrStatus.style.color = '#0a8a3d';
+  qrStatus.textContent = 'Đã tạo mã QR. Quét bằng ứng dụng ngân hàng/ví điện tử hỗ trợ VietQR để chuyển khoản nhanh, hoặc bấm "Tải ảnh QR" để lưu về máy.';
+}
+$('genQrBtn').onclick = generateQr;
+
+async function downloadQr() {
+  const img = document.getElementById('qrImgEl');
+  if (!img) return;
+  const btn = $('downloadQrBtn');
+  const oldText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Đang tải...';
+  try {
+    const res = await fetch(img.src);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'QR_ChuyenKhoan_BHXH.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch (err) {
+    // Nếu bị chặn CORS khi tải ảnh, mở ảnh ở tab mới để người dùng tự lưu.
+    window.open(img.src, '_blank');
+  } finally {
+    btn.disabled = false; btn.textContent = oldText;
+  }
+}
+$('downloadQrBtn').onclick = downloadQr;
+
+/* ===== Mẫu nhập liệu đầu trang: chọn tháng/năm tra cứu + xuất PDF để ký số ===== */
+(function initLookupSelects(){
+  const monthSel = $('lookupMonth'), yearSel = $('lookupYear');
+  for (let m = 1; m <= 12; m++) {
+    const opt = document.createElement('option');
+    opt.value = String(m); opt.textContent = 'Tháng ' + m;
+    monthSel.appendChild(opt);
+  }
+  const now = new Date();
+  const curYear = now.getFullYear();
+  for (let y = curYear + 1; y >= curYear - 4; y--) {
+    const opt = document.createElement('option');
+    opt.value = String(y); opt.textContent = 'Năm ' + y;
+    yearSel.appendChild(opt);
+  }
+  monthSel.value = String(now.getMonth() + 1);
+  yearSel.value = String(curYear);
+})();
+
+function getLookupInfo(){
+  return {
+    ten_cong_ty: $('companyName').value.trim(),
+    mst: $('companyMST').value.trim(),
+    ma_bhxh: $('companyBHXH').value.trim(),
+    thang: $('lookupMonth').value,
+    nam: $('lookupYear').value
+  };
+}
+
+async function exportPdfForm(){
+  const info = getLookupInfo();
+  const statusEl = $('formStatus');
+  if (!info.ten_cong_ty || !info.mst || !info.ma_bhxh) {
+    statusEl.style.color = '#b30000';
+    statusEl.textContent = 'Vui lòng nhập đầy đủ Tên công ty, Mã số thuế và Mã BHXH trước khi xuất PDF.';
+    return;
+  }
+  $('pdfCompanyName').textContent = info.ten_cong_ty;
+  $('pdfMST').textContent = info.mst;
+  $('pdfBHXH').textContent = info.ma_bhxh;
+  $('pdfThangNam').textContent = 'Tháng ' + info.thang + '/' + info.nam;
+
+  const btn = $('exportPdfBtn');
+  const oldText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Đang tạo PDF...';
+  statusEl.style.color = '#455a64';
+  statusEl.textContent = 'Đang tạo file PDF...';
+  try {
+    const el = $('pdfExportTemplate');
+    // scale 1.5 vẫn đủ nét để ký số/in ấn (tương đương ~144dpi cho khổ A4),
+    // giảm nhiều so với scale 2 trước đây mà không ảnh hưởng rõ rệt tới chất lượng.
+    const canvas = await html2canvas(el, { scale: 1.5, backgroundColor: '#ffffff' });
+    // Dùng JPEG nén (thay vì PNG không nén) vì nội dung là văn bản/nền trắng đơn giản
+    // - JPEG chất lượng 0.85 giảm dung lượng file rất nhiều mà mắt thường không thấy khác biệt.
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'pt', 'a4', { compress: true });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgW = pageWidth;
+    const imgH = canvas.height * imgW / canvas.width;
+    let heightLeft = imgH, position = 0;
+    pdf.addImage(imgData, 'JPEG', 0, 0, imgW, imgH, undefined, 'FAST');
+    heightLeft -= pageHeight;
+    while (heightLeft > 0) {
+      position = heightLeft - imgH;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH, undefined, 'FAST');
+      heightLeft -= pageHeight;
+    }
+    const fname = 'PhieuTraCuu_' + info.mst + '_' + info.thang + '-' + info.nam + '.pdf';
+    pdf.save(fname);
+    statusEl.style.color = '#0a8a3d';
+    statusEl.textContent = 'Đã xuất "' + fname + '". Hãy ký số file này, sau đó chọn lại file PDF đã ký ở bước 2 rồi bấm "Lấy số liệu" ở bước 3.';
+  } catch (err) {
+    statusEl.style.color = '#b30000';
+    statusEl.textContent = 'Lỗi khi xuất PDF: ' + err;
+  } finally {
+    btn.disabled = false; btn.textContent = oldText;
+  }
+}
+$('exportPdfBtn').onclick = exportPdfForm;
+
+(function initScriptConfigNote(){
+  const note = $('scriptConfigNote');
+  if (!GOOGLE_SCRIPT_IDENTITY_URL || GOOGLE_SCRIPT_IDENTITY_URL.indexOf('DÁN_URL_') === 0) {
+    note.textContent = '⚠ Chưa cấu hình GOOGLE_SCRIPT_IDENTITY_URL trong file này. Xem hướng dẫn ở phần "Cách dùng khác" bên dưới, hoặc dán URL Apps Script vào biến GOOGLE_SCRIPT_IDENTITY_URL trong mã nguồn.';
+  } else {
+    note.style.display = 'none';
+  }
+})();
+
+// Chuyển Uint8Array sang base64 theo từng đoạn nhỏ để tránh tràn ngăn xếp với file PDF lớn.
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function checkIdentityViaScript() {
+  const lookup = getLookupInfo();
+  if (!lookup.thang || !lookup.nam) {
+    showIdentityResult('warning', 'Chưa chọn tháng tra cứu', 'Vui lòng chọn Tháng và Năm cần tra cứu dữ liệu ở mẫu nhập liệu đầu trang.');
+    return;
+  }
+  if (!lastSig) {
+    showIdentityResult('warning', 'Chưa có chữ ký để lấy số liệu', 'Vui lòng chọn và đọc một file PDF đã ký số trước (file PDF xuất ra ở bước 1, đã ký số).');
+    return;
+  }
+  if (!lastPdfBytes) {
+    showIdentityResult('warning', 'Chưa có file PDF để tải lên Drive', 'Vui lòng chọn lại file PDF đã ký số ở bước 2 trước khi lấy số liệu.');
+    return;
+  }
+  if (!GOOGLE_SCRIPT_IDENTITY_URL || GOOGLE_SCRIPT_IDENTITY_URL.indexOf('DÁN_URL_') === 0) {
+    showIdentityResult('error', 'Chưa cấu hình nơi lấy số liệu',
+      'Biến GOOGLE_SCRIPT_IDENTITY_URL chưa được cấu hình trong file này.\nHãy triển khai Google Apps Script (xem Code_DoiChieuDanhTinh.gs) rồi dán URL Web App vào biến này.');
+    return;
+  }
+  const candidate = lastSig.ma_so_thue || lookup.mst || '';
+  if (!candidate) {
+    showIdentityResult('warning', 'Không đọc được mã số thuế', 'Không tìm thấy mã số thuế trong chứng thư của chữ ký này (xem thêm ở Console - F12 nếu cần chẩn đoán).');
+    return;
+  }
+  const btn = $('checkIdentityBtn');
+  btn.disabled = true; btn.textContent = 'Đang tải file lên Drive & lấy số liệu...';
+  try {
+    // Gửi kèm nội dung PDF đã ký số (dạng base64) để Apps Script lưu file này vào
+    // một thư mục Google Drive, cùng lúc với việc đối chiếu/lấy số liệu.
+    const res = await fetch(GOOGLE_SCRIPT_IDENTITY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      // "thang" và "nam" cho Apps Script biết cần đọc vào sheet (tab) của tháng nào trên Google Sheet.
+      // "pdf_base64"/"pdf_filename" để Apps Script lưu file PDF đã ký số vào thư mục Drive đã cấu hình.
+      body: JSON.stringify({
+        action: 'checkMST',
+        mst: candidate,
+        thang: Number(lookup.thang),
+        nam: Number(lookup.nam),
+        ten_cong_ty: lookup.ten_cong_ty || lastSig.ten_cong_ty || '',
+        ma_bhxh: lookup.ma_bhxh || '',
+        pdf_filename: lastPdfName || ('PhieuDeNghi_' + candidate + '_' + lookup.thang + '-' + lookup.nam + '.pdf'),
+        pdf_base64: bytesToBase64(lastPdfBytes)
+      })
+    });
+    const data = await res.json();
+    btn.disabled = false; btn.textContent = 'Lấy số liệu';
+    if (data && data.status === 'match') {
+      let html = '<div>Số liệu căn cứ vào C12 tạm tính của tháng ' + esc(String(lookup.thang)) + '/' + esc(String(lookup.nam)) + '.</div>' + buildMatchTable(data.row, lookup.thang, lookup.nam);
+      html += driveUploadNoteHtml(data);
+      showIdentityResult('success', 'Đã lấy số liệu', html, true);
+      showQrPanel(data.row, lookup.thang, lookup.nam);
+    } else if (data && data.status === 'no_match') {
+      let msg = 'Mã số thuế của đơn vị đang khác với mã số thuế mà cơ quan BHXH cơ sở Thanh Trì đang quản lý, đề nghị liên hệ để kiểm tra lại!';
+      showIdentityResult('warning', 'Không tìm thấy số liệu', msg + driveUploadNoteText(data));
+      $('qrPanel').classList.remove('show');
+    } else {
+      const reason = (data && data.message) ? data.message : 'Lỗi không xác định.';
+      const thieuThang = /kh[oô]ng t[iìí]m th[aấ]y sheet/i.test(reason);
+      if (thieuThang) {
+        showIdentityResult('warning', 'Chưa có số liệu', 'Số liệu tháng bạn cần hiện tại chưa có trên hệ thống!' + driveUploadNoteText(data));
+      } else {
+        showIdentityResult('error', 'Lấy số liệu thất bại', 'Không thể lấy số liệu.\nChi tiết lỗi: ' + reason);
+      }
+      $('qrPanel').classList.remove('show');
+    }
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Lấy số liệu';
+    showIdentityResult('error', 'Không thể kết nối tới máy chủ',
+      'Vui lòng kiểm tra kết nối Internet và URL Apps Script rồi thử lại.\nChi tiết lỗi: ' + err.message);
+    $('qrPanel').classList.remove('show');
+  }
+}
+$('checkIdentityBtn').onclick = checkIdentityViaScript;
+
+// Hiển thị (nếu có) CẢNH BÁO khi lưu file PDF lên Google Drive thất bại — không
+// hiển thị thông báo khi lưu thành công (để không làm rối phần kết quả số liệu).
+function driveUploadNoteHtml(data) {
+  if (data && data.drive_upload_error) {
+    return '<div style="margin-top:8px;font-size:12.5px;color:#b30000">⚠ Lấy được số liệu nhưng lưu file PDF lên Drive thất bại: ' + esc(data.drive_upload_error) + '</div>';
+  }
+  return '';
+}
+function driveUploadNoteText(data) {
+  if (data && data.drive_upload_error) return '\n(Lưu file PDF lên Drive thất bại: ' + data.drive_upload_error + ')';
+  return '';
+}
+
+$('pdfFile').onchange=async e=>{
+ const f=e.target.files[0];if(!f)return;
+ $('pdfStatus').textContent='Đang đọc PDF bằng pypdf + cryptography...';
+ try{
+  const b=new Uint8Array(await f.arrayBuffer());
+  lastPdfBytes=b; lastPdfName=f.name;
+  const sigs=await pyCall('run_pdf',b,f.name);
+  showSig(sigs);
+  $('pdfStatus').textContent=sigs.length?`Tìm thấy ${sigs.length} chữ ký số.`:'Không tìm thấy trường chữ ký /Sig.';
+ }catch(err){$('pdfStatus').textContent='Lỗi đọc PDF: '+err}
+};
+
+$('copyPdfCompany').onclick=()=>{if(lastSig)navigator.clipboard?.writeText(lastSig.ten_cong_ty||lastSig.ten_chu_the||lastSig.signer_name_field||'')};
+</script>
+</body>
+</html>
