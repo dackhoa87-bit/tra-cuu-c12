@@ -438,6 +438,17 @@ function showSig(sigs){
    Dán URL Web App (dạng https://script.google.com/macros/s/XXXX/exec) vào đây: */
 const GOOGLE_SCRIPT_IDENTITY_URL = 'https://script.google.com/macros/s/AKfycbxSrty_BSt_hyNl0UtEfGt9DI1jUeqoDF9ek1tmdrGA746mlJKS0_A0i21Xw09l4T9D/exec';
 
+/* ===== KHÓA BÍ MẬT CHO REQUEST (chống gọi thẳng Apps Script từ bên ngoài) =====
+   Vì file HTML này công khai (host trên GitHub Pages), URL Apps Script ở trên ai
+   cũng xem được. Để hạn chế người lạ tự gửi request thẳng tới Apps Script (không
+   qua giao diện, không cần có file PDF ký số thật), mỗi request gửi kèm khóa này;
+   Apps Script chỉ trả số liệu nếu khóa khớp (xem API_SECRET_KEY trong
+   Code_DoiChieuDanhTinh.gs — PHẢI đặt giống hệt giá trị bên dưới).
+   LƯU Ý: đây chỉ là hàng rào "che mắt người qua đường", không phải bảo mật tuyệt
+   đối — vì khóa này vẫn nằm trong mã nguồn công khai, ai chịu khó mở F12/xem mã
+   nguồn vẫn đọc được. Đổi giá trị dưới đây thành một chuỗi khó đoán của riêng bạn: */
+const API_SECRET_KEY = 'ĐỔI_CHUỖI_BÍ_MẬT_CỦA_BẠN_VÀO_ĐÂY';
+
 function showIdentityResult(type, title, message, isHtml) {
   const box = document.getElementById('identityResultBox');
   const icon = document.getElementById('irIcon');
@@ -726,6 +737,7 @@ async function checkIdentityViaScript() {
       // "pdf_base64"/"pdf_filename" để Apps Script lưu file PDF đã ký số vào thư mục Drive đã cấu hình.
       body: JSON.stringify({
         action: 'checkMST',
+        secret: API_SECRET_KEY,
         mst: candidate,
         thang: Number(lookup.thang),
         nam: Number(lookup.nam),
