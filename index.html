@@ -715,7 +715,7 @@ async function checkIdentityViaScript() {
     return;
   }
   const btn = $('checkIdentityBtn');
-  btn.disabled = true; btn.textContent = 'Đang tải file lên Drive & lấy số liệu...';
+  btn.disabled = true; btn.textContent = 'Đang tải số liệu. Vui lòng chờ một chút...';
   try {
     // Gửi kèm nội dung PDF đã ký số (dạng base64) để Apps Script lưu file này vào
     // một thư mục Google Drive, cùng lúc với việc đối chiếu/lấy số liệu.
